@@ -114,13 +114,13 @@ export async function fetchVttsFromM3u8(
   const vttParts: string[] = ["WEBVTT\n"];
   const plainParts: string[] = [];
   
-  console.log(`[VTT Module] Fetching ${vttUrls.length} VTT files...`);
+  // console.log(`[VTT Module] Fetching ${vttUrls.length} VTT files...`);
   
   for (const vttUrl of vttUrls) {
     try {
       const response = await fetch(vttUrl);
       if (!response.ok) {
-        console.warn(`Failed to fetch VTT: ${vttUrl}`);
+        // console.warn(`Failed to fetch VTT: ${vttUrl}`);
         continue;
       }
       const content = await response.text();
@@ -131,12 +131,11 @@ export async function fetchVttsFromM3u8(
         timestamp: Date.now(),
       });
       
-      // Remove WEBVTT header for merging
       const cleanContent = content.replace(/^\ufeff?WEBVTT[^\n]*\n/, "");
       vttParts.push(cleanContent.trim() + "\n\n");
       plainParts.push(vttToPlainText(cleanContent));
     } catch (err) {
-      console.warn(`Error fetching VTT ${vttUrl}:`, err);
+      // console.warn(`Error fetching VTT ${vttUrl}:`, err);
     }
   }
   

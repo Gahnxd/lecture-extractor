@@ -24,16 +24,16 @@ export function srtToPlainText(srtContent: string): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].replace(/^\ufeff/, "").trim(); // Remove BOM & whitespace
     
-    // 1. Skip blank lines
+    // Skip blank lines
     if (!line) continue;
     
-    // 2. Skip numeric counter lines (just digits)
+    // Skip numeric counter lines (just digits)
     if (/^\d+$/.test(line)) continue;
     
-    // 3. Skip timestamps
+    // Skip timestamps
     if (timestampRe.test(line)) continue;
     
-    // 4. Text line
+    // Text line
     if (line !== lastKept) {
       out.push(line);
       lastKept = line;

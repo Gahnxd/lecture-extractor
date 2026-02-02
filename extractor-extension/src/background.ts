@@ -32,36 +32,33 @@ async function getPageInfo(tabId: number): Promise<{ url: string; title: string 
  * Process a detected M3U8 URL
  */
 async function processM3u8Url(m3u8Url: string, tabId: number) {
-  console.log(`[Background] Processing M3U8: ${m3u8Url}`);
+  // console.log(`[Background] Processing M3U8: ${m3u8Url}`);
   
   try {
     const result = await chrome.storage.local.get(["global_data"]);
     const globalData: GlobalData = (result.global_data as GlobalData) || { transcripts: [] };
     const pageInfo = await getPageInfo(tabId);
     
-    // Check if already have SRT
+    // Skip if SRT already exists for this page
     const existingEntry = globalData.transcripts.find(t => t.pageUrl === pageInfo.url);
-    if (existingEntry && existingEntry.format === "srt") {
-      console.log(`[Background] Ignoring M3U8 because SRT already exists for this page.`);
-      return;
-    }
+    if (existingEntry && existingEntry.format === "srt") return;
 
     // Fetch the M3U8 content
     let m3u8Content: string;
     try {
       m3u8Content = await fetchM3u8Content(m3u8Url);
     } catch (e) {
-      console.warn(`[Background] Failed to fetch M3U8:`, e);
+      // console.warn(`[Background] Failed to fetch M3U8:`, e);
       return;
     }
     
     // Check VTT references
     if (!isValidM3u8Content(m3u8Content)) {
-      console.log(`[Background] Invalid M3U8 for VTT: ${m3u8Url}`);
+      // console.debug(`[Background] Invalid M3U8 for VTT: ${m3u8Url}`);
       return;
     }
     
-    console.log(`[Background] Found M3U8 with VTT refs: ${m3u8Url}`);
+    // console.debug(`[Background] Found M3U8 with VTT refs: ${m3u8Url}`);
     
     await createOrUpdateEntry({
       sourceUrl: m3u8Url,
@@ -80,10 +77,9 @@ async function processM3u8Url(m3u8Url: string, tabId: number) {
       status: "complete",
     }, tabId);
     
-    console.log(`[Background] Captured ${vtts.length} VTT files`);
-    
+    // console.log(`[Background] Captured ${vtts.length} VTT files`);
   } catch (err) {
-    console.error(`[Background] Error processing M3U8:`, err);
+    // console.error(`[Background] Error processing M3U8:`, err);
   }
 }
 
@@ -91,17 +87,11 @@ async function processM3u8Url(m3u8Url: string, tabId: number) {
  * Process a detected SRT URL
  */
 async function processSrtUrl(srtUrl: string, tabId: number) {
-  console.log(`[Background] Processing SRT: ${srtUrl}`);
+  // console.log(`[Background] Processing SRT: ${srtUrl}`);
 
   try {
     const pageInfo = await getPageInfo(tabId);
-
-    // Fetch and process SRT
-    // Utilizing modularized logic
     const { rawSrt, transcript } = await fetchSrt(srtUrl);
-
-    // Prefer SRT: If we see SRT, we overwrite any existing VTT entry for this page.
-    console.log(`[Background] Found SRT, creating/overwriting entry: ${srtUrl}`);
 
     await createOrUpdateEntry({
       sourceUrl: srtUrl,
@@ -112,13 +102,13 @@ async function processSrtUrl(srtUrl: string, tabId: number) {
 
     await updateEntryStatus(pageInfo.url, {
       vtts: [],
-      rawVtt: rawSrt, // Using rawVtt field to store SRT content for now
+      rawVtt: rawSrt,
       transcript,
       status: "complete",
     }, tabId);
 
   } catch (err) {
-    console.error(`[Background] Error processing SRT:`, err);
+    // console.error(`[Background] Error processing SRT:`, err);
   }
 }
 
@@ -189,10 +179,8 @@ chrome.webRequest.onCompleted.addListener(
   (details) => {
     if (details.tabId > 0) {
       if (isM3u8Url(details.url)) {
-        console.log(`[Background] ✓ Detected M3U8: ${details.url}`);
         processM3u8Url(details.url, details.tabId);
       } else if (isSrtUrl(details.url)) {
-        console.log(`[Background] ✓ Detected SRT: ${details.url}`);
         processSrtUrl(details.url, details.tabId);
       }
     }
@@ -200,7 +188,7 @@ chrome.webRequest.onCompleted.addListener(
   { urls: ["<all_urls>"] }
 );
 
-console.log("[Background] webRequest listeners registered");
+// console.log("[Background] webRequest listeners registered");
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -235,4 +223,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-console.log("[Background] Service worker started");
+
+
+// Handle extension icon click - toggle floating button
+chrome.action.onClicked.addListener(async (tab) => {
+  if (tab.id) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_FLOATING_UI" });
+    } catch (err) {
+      // console.log("[Background] Could not send toggle message:", err);
+    }
+  }
+});

@@ -1,7 +1,5 @@
-// Injected script that intercepts XHR and fetch requests to capture M3U8 responses
-// This runs in the page context, NOT the extension context
+// Intercepts XHR/fetch to capture M3U8 responses (runs in page context)
 
-// Extend XMLHttpRequest with custom property
 interface ExtendedXMLHttpRequest extends XMLHttpRequest {
   _requestUrl?: string;
 }
@@ -49,7 +47,6 @@ function mightBeM3u8(url: string, contentType: string): boolean {
   );
 }
 
-// Intercept XMLHttpRequest
 const originalXhrOpen = XMLHttpRequest.prototype.open;
 const originalXhrSend = XMLHttpRequest.prototype.send;
 
@@ -79,7 +76,7 @@ XMLHttpRequest.prototype.send = function (
       if (this.responseText && mightBeM3u8(url, contentType)) {
         // Actually verify the content is M3U8 with VTT
         if (isVttM3u8(this.responseText)) {
-          console.log("[VTT Interceptor] XHR Captured M3U8 with VTT:", url);
+          // console.log("[VTT Interceptor] XHR Captured M3U8 with VTT:", url);
           const message: M3u8CaptureMessage = {
             type: "M3U8_CAPTURED",
             url: url,
@@ -90,13 +87,12 @@ XMLHttpRequest.prototype.send = function (
         }
       }
     } catch (err) {
-      console.debug("[VTT Interceptor] Error processing XHR response:", err);
+      // console.debug("[VTT Interceptor] Error processing XHR response:", err);
     }
   });
   return originalXhrSend.call(this, body);
 };
 
-// Intercept fetch
 const originalFetch = window.fetch;
 
 window.fetch = async function (...args: Parameters<typeof fetch>) {
@@ -116,13 +112,11 @@ window.fetch = async function (...args: Parameters<typeof fetch>) {
 
     // Check if response might be M3U8 (more permissive check)
     if (mightBeM3u8(url, contentType)) {
-      // Clone the response so we can read it without consuming it
       const clonedResponse = response.clone();
       const content = await clonedResponse.text();
 
-      // Actually verify the content is M3U8 with VTT
       if (isVttM3u8(content)) {
-        console.log("[VTT Interceptor] Fetch Captured M3U8 with VTT:", url);
+        // console.log("[VTT Interceptor] Fetch Captured M3U8 with VTT:", url);
         const message: M3u8CaptureMessage = {
           type: "M3U8_CAPTURED",
           url: url,
@@ -133,10 +127,10 @@ window.fetch = async function (...args: Parameters<typeof fetch>) {
       }
     }
   } catch (err) {
-    console.debug("[VTT Interceptor] Error processing fetch response:", err);
+    // console.debug("[VTT Interceptor] Error processing fetch response:", err);
   }
 
   return response;
 };
 
-console.log("[VTT Interceptor] M3U8 network interception active (v2)");
+// console.log("[VTT Interceptor] M3U8 network interception active");

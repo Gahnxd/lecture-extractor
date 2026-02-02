@@ -55,8 +55,7 @@ function App() {
 
   useEffect(() => {
     fetchTranscripts();
-    
-    // Listen for storage changes
+
     const handleStorageChange = (
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string
@@ -113,16 +112,12 @@ function App() {
     });
   };
 
-  // Renaming to generic downloadRaw since it can be VTT or SRT
   const downloadRaw = (entry: TranscriptEntry) => {
     if (!entry.rawVtt) return;
-    // We save as .txt to verify we can handle both formats simply,
-    // or keep original extension. User requested "turn file into .txt".
     const blob = new Blob([entry.rawVtt], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    // Use .txt extension for both VTT and SRT raw content as requested
     a.download = `${sanitizeFilename(entry.pageTitle)}_raw.txt`;
     a.click();
     URL.revokeObjectURL(url);
