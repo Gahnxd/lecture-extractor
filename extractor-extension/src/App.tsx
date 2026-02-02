@@ -46,18 +46,7 @@ import {
 import "./App.css";
 import { Spinner } from "./components/ui/spinner";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
-
-interface TranscriptEntry {
-  id: string;
-  m3u8Url: string;
-  pageUrl: string;
-  pageTitle: string;
-  rawVtt: string;
-  transcript: string;
-  timestamp: number;
-  status: "loading" | "complete" | "error";
-  error?: string;
-}
+import type { TranscriptEntry } from "./lib/extract";
 
 function App() {
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
@@ -124,13 +113,17 @@ function App() {
     });
   };
 
-  const downloadVtt = (entry: TranscriptEntry) => {
+  // Renaming to generic downloadRaw since it can be VTT or SRT
+  const downloadRaw = (entry: TranscriptEntry) => {
     if (!entry.rawVtt) return;
-    const blob = new Blob([entry.rawVtt], { type: "text/vtt" });
+    // We save as .txt to verify we can handle both formats simply,
+    // or keep original extension. User requested "turn file into .txt".
+    const blob = new Blob([entry.rawVtt], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${sanitizeFilename(entry.pageTitle)}.vtt`;
+    // Use .txt extension for both VTT and SRT raw content as requested
+    a.download = `${sanitizeFilename(entry.pageTitle)}_raw.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -151,7 +144,7 @@ function App() {
     navigator.clipboard.writeText(entry.transcript);
   };
 
-  const copyVtt = (entry: TranscriptEntry) => {
+  const copyRaw = (entry: TranscriptEntry) => {
     if (!entry.rawVtt) return;
     navigator.clipboard.writeText(entry.rawVtt);
   };
@@ -165,9 +158,9 @@ function App() {
     selectedEntries.forEach(entry => downloadText(entry));
   };
 
-  const downloadSelectedVtt = () => {
+  const downloadSelectedRaw = () => {
     const selectedEntries = getSelectedEntries();
-    selectedEntries.forEach(entry => downloadVtt(entry));
+    selectedEntries.forEach(entry => downloadRaw(entry));
   };
 
   const copySelectedText = () => {
@@ -177,9 +170,9 @@ function App() {
     navigator.clipboard.writeText(text);
   };
 
-  const copySelectedVtt = () => {
+  const copySelectedRaw = () => {
     const text = getSelectedEntries()
-      .map(t => `WEBVTT\nNOTE Source: ${t.pageTitle}\n\n${t.rawVtt.replace("WEBVTT", "").trim()}`)
+      .map(t => `--- Raw Content for ${t.pageTitle} ---\n\n${t.rawVtt}`)
       .join("\n\n");
     navigator.clipboard.writeText(text);
   };
@@ -229,7 +222,7 @@ function App() {
                 Download Selected
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={downloadSelectedVtt}
+                onClick={downloadSelectedRaw}
                 className="focus:bg-zinc-600 focus:text-white cursor-pointer"
               >
                 <DownloadIcon className="size-4 mr-2 text-zinc-300" />
@@ -243,7 +236,7 @@ function App() {
                 Copy Selected
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={copySelectedVtt}
+                onClick={copySelectedRaw}
                 className="focus:bg-zinc-600 focus:text-white cursor-pointer"
               >
                 <ClipboardCopyIcon className="size-4 mr-2 text-zinc-300" />
@@ -323,6 +316,7 @@ function App() {
                         }}
                       >
                         {entry.pageTitle}
+                        {entry.format === 'srt' && <span className="ml-2 text-xs text-muted-foreground border border-zinc-700 px-1 rounded">SRT</span>}
                       </motion.div>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-[350px] bg-zinc-800 text-white border-none" arrowClassName="fill-zinc-800 bg-zinc-800">
@@ -356,12 +350,12 @@ function App() {
                         Download Transcript
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => downloadVtt(entry)}
+                        onClick={() => downloadRaw(entry)}
                         disabled={entry.status !== "complete"}
                         className="focus:bg-zinc-600 focus:text-white cursor-pointer"
                       >
                         <DownloadIcon className="size-4 mr-2 text-zinc-300" />
-                        Download Raw Transcript
+                        Download Raw
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => copyText(entry)}
@@ -372,12 +366,12 @@ function App() {
                         Copy Transcript
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => copyVtt(entry)}
+                        onClick={() => copyRaw(entry)}
                         disabled={entry.status !== "complete"}
                         className="focus:bg-zinc-600 focus:text-white cursor-pointer"
                       >
                         <ClipboardCopyIcon className="size-4 mr-2 text-zinc-300" />
-                        Copy Raw Transcript
+                        Copy Raw
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-zinc-700" />
                       <DropdownMenuItem
