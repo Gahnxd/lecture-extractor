@@ -1,59 +1,81 @@
-# Lecture Extractor
+# Lecture Extractor CLI
 
-A Python script to extract and merge subtitles/transcripts from M3U8 playlists (commonly used by Kaltura and other video players).
+A command-line tool to extract and merge video transcripts (subtitles/captions) from M3U8 playlists. This is useful for downloading transcripts from video platforms that use HLS streaming (like Kaltura) for offline reading or processing.
+
+## Features
+
+- **Interactive CLI**: Easy-to-use interactive prompts for folder names and URLs.
+- **M3U8 Parsing**: Extract VTT segment paths from M3U8 playlists.
+- **Transcript Merging**: Downloads and merges multiple VTT segments into a single file.
+- **Clean Output**:
+  - Generates a **raw VTT** file with timestamps preserved.
+  - Generates a **clean text** transcript with metadata and timestamps removed.
+- **Progress Tracking**: Visual progress bar during download.
 
 ## Prerequisites
 
-- `uv` (recommended) or Python 3.x
-- `requests`, `rich`, `questionary` (installed automatically with `uv`)
+- Python 3.x
+- [uv](https://github.com/astral-sh/uv) (Recommended for dependency management) or `pip`
 
-### Using `uv` (Recommended)
+## Installation & Usage
 
-```bash
-cd lecture-extractor-cli
-uv run main.py
-```
+### Method 1: Using `uv` (Recommended)
 
-### Using Standard Python / pip
+`uv` is a fast Python package installer and runner. It handles virtual environments and dependencies automatically.
 
-```bash
-cd lecture-extractor-cli
-pip install requests rich questionary
-python main.py
-```
+1.  Navigate to the CLI directory:
 
-## Finding the M3U8 URL
+    ```bash
+    cd lecture-extractor-cli
+    ```
 
-To use this script, you first need to find the `.m3u8` playlist URL for the video you want to process.
+2.  Run the script directly:
+    ```bash
+    uv run main.py
+    ```
 
-1. Open the video page in your browser (e.g., Chrome).
-2. Right-click anywhere on the page and select **Inspect** to open Developer Tools.
-3. Switch to the **Network** tab in Developer Tools.
-4. In the filter box (top left of the Network tab), type `m3u8`.
-5. Refresh the page. You should see network requests appearing.
-6. Look for a request that returns the master playlist or index file (often has `master.m3u8` or `index.m3u8` or `a.m3u8` in the name).
-7. Right-click that request -> **Copy** -> **Copy link address** (or **Copy URL**).
+### Method 2: Using Standard Python / pip
 
-## Usage
+1.  Navigate to the CLI directory:
 
-Run the script:
+    ```bash
+    cd lecture-extractor-cli
+    ```
 
-```bash
-cd lecture-extractor-cli
-uv run main.py
-# or if using standard python
-python main.py
-```
+2.  Install dependencies:
 
-The script will prompt you to enter:
+    ```bash
+    pip install requests rich questionary
+    ```
 
-1.  **Folder Name**: A name for the output directory (e.g., `Week1_Lecture`).
-2.  **M3U8 URL**: The full URL you copied from the Network tab.
+3.  Run the script:
+    ```bash
+    python main.py
+    ```
 
-## Output
+## How to Get the M3U8 URL
 
-The script will search for `.vtt` subtitle segments in the playlist, download them, and merge them.
-A new directory named `<FOLDER_NAME>` (e.g., `Week1_Lecture`) will be created containing:
+To use this tool, you need the `.m3u8` playlist URL for the video's subtitles.
 
-- `<FOLDER_NAME>_raw.vtt`: The raw merged WebVTT file (with timestamps).
-- `<FOLDER_NAME>_transcript.txt`: A clean plain-text transcript (timestamps and metadata removed).
+1.  **Open Developer Tools**: Right-click on the video page and select "Inspect", then go to the **Network** tab.
+2.  **Filter**: Type `m3u8` or `vtt` in the filter box.
+3.  **Refresh/Play**: Refresh the page or play the video to trigger network requests.
+4.  **Find the Playlist**: Look for a request that ends in `.m3u8` (often named `master.m3u8`, `index.m3u8`, or similar).
+    - _Note_: Ensure the M3U8 file contains references to `.vtt` files (you can check the "Response" tab in DevTools).
+5.  **Copy URL**: Right-click the request -> **Copy** -> **Copy link address**.
+
+## Workflow
+
+1.  Run the script using one of the methods above.
+2.  Enter a **Folder Name** when prompted (this will be the name of the output directory).
+3.  Paste the **M3U8 URL** you copied.
+4.  The script will:
+    - distinct `.vtt` segments.
+    - Download each segment.
+    - Merge them into a single VTT and a single text file.
+5.  Check the output folder for your transcripts!
+
+## Project Structure
+
+- `main.py`: The main entry point and logic for the CLI tool.
+- `pyproject.toml` / `uv.lock`: Dependency management files.
