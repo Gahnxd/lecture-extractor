@@ -6,10 +6,6 @@ import { SquareButton } from "@/components/ui/square-button";
 
 export default function Home() {
 
-
-
-
-
   return (
     <div className="h-screen w-full bg-black flex flex-col items-center justify-center overflow-hidden">
       <Spotlight duration={0} brightness={2} rotate={50} xOffset={0} />
@@ -24,9 +20,14 @@ export default function Home() {
 
         <div className="absolute inset-0 w-full h-full bg-black [mask-image:radial-gradient(350px_200px_at_top,transparent_20%,white)]"></div>
       </div>
-      <a href="/extension.zip" download>
-        <SquareButton className="w-[20%] -translate-y-10" blinkRate={0.8}>Download Extension</SquareButton>
-      </a>
+      <SquareButton 
+        className="w-[15%] -translate-y-10 text-lg" 
+        blinkRate={0.8} 
+        href="/extension.zip" 
+        download
+      >
+        Download Extension
+      </SquareButton>
     </div>
   );
 }

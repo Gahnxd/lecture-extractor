@@ -29,6 +29,9 @@ type SquareButtonProps = Omit<HTMLMotionProps<"button">, "children"> &
     icon?: React.ReactNode
     children?: React.ReactNode
     blinkRate?: number
+    href?: string
+    download?: boolean | string
+    target?: string
   }
 
 function SquareButton({
@@ -38,6 +41,8 @@ function SquareButton({
   icon,
   children,
   blinkRate = 0.8,
+  href,
+  onClick,
   ...props
 }: SquareButtonProps) {
   const [isHovered, setIsHovered] = React.useState(false)
@@ -64,8 +69,12 @@ function SquareButton({
     )
   }
 
+  const Component = (href ? motion.a : motion.button) as any
+  
+  const componentProps = href ? { href, ...props } : { onClick, ...props }
+
   return (
-    <motion.button
+    <Component
       data-slot="square-button"
       data-size={size}
       className={cn(
@@ -75,7 +84,7 @@ function SquareButton({
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
       whileTap={{ scale: 0.98 }}
-      {...props}
+      {...componentProps}
     >
       {/* Background with blur */}
       <motion.div
@@ -169,7 +178,7 @@ function SquareButton({
       >
         {content}
       </motion.span>
-    </motion.button>
+    </Component>
   )
 }
 
