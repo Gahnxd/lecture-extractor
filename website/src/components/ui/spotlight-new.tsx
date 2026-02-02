@@ -10,6 +10,7 @@ type SpotlightProps = {
   smallWidth?: number;
   duration?: number;
   xOffset?: number;
+  rotate?: number;
 };
 
 export const Spotlight = ({
@@ -20,6 +21,7 @@ export const Spotlight = ({
   smallWidth = 240,
   duration = 7,
   xOffset = 100,
+  rotate = 45,
 }: SpotlightProps = {}) => {
   // Base opacity values, multiplied by brightness
   const gradientFirst = `radial-gradient(68.54% 68.72% at 55.02% 31.46%, hsla(210, 100%, 85%, ${0.08 * brightness}) 0, hsla(210, 100%, 55%, ${0.02 * brightness}) 50%, hsla(210, 100%, 45%, 0) 80%)`;
@@ -53,7 +55,7 @@ export const Spotlight = ({
       >
         <div
           style={{
-            transform: `translateY(${translateY}px) rotate(-45deg)`,
+            transform: `translateY(${translateY}px) rotate(-${rotate}deg)`,
             background: gradientFirst,
             width: `${width}px`,
             height: `${height}px`,
@@ -63,7 +65,7 @@ export const Spotlight = ({
 
         <div
           style={{
-            transform: "rotate(-45deg) translate(5%, -50%)",
+            transform: `rotate(-${rotate}deg) translate(5%, -50%)`,
             background: gradientSecond,
             width: `${smallWidth}px`,
             height: `${height}px`,
@@ -73,7 +75,7 @@ export const Spotlight = ({
 
         <div
           style={{
-            transform: "rotate(-45deg) translate(-180%, -70%)",
+            transform: `rotate(-${rotate}deg) translate(-180%, -70%)`,
             background: gradientThird,
             width: `${smallWidth}px`,
             height: `${height}px`,
@@ -96,7 +98,7 @@ export const Spotlight = ({
       >
         <div
           style={{
-            transform: `translateY(${translateY}px) rotate(45deg)`,
+            transform: `translateY(${translateY}px) rotate(${rotate}deg)`,
             background: gradientFirst,
             width: `${width}px`,
             height: `${height}px`,
@@ -106,7 +108,7 @@ export const Spotlight = ({
 
         <div
           style={{
-            transform: "rotate(45deg) translate(-5%, -50%)",
+            transform: `rotate(${rotate}deg) translate(-5%, -50%)`,
             background: gradientSecond,
             width: `${smallWidth}px`,
             height: `${height}px`,
@@ -116,7 +118,7 @@ export const Spotlight = ({
 
         <div
           style={{
-            transform: "rotate(45deg) translate(180%, -70%)",
+            transform: `rotate(${rotate}deg) translate(180%, -70%)`,
             background: gradientThird,
             width: `${smallWidth}px`,
             height: `${height}px`,
