@@ -1,14 +1,15 @@
 # Lecture Extractor CLI
 
-A command-line tool to extract and merge video transcripts (subtitles/captions) from M3U8 playlists. This is useful for downloading transcripts from video platforms that use HLS streaming (like Kaltura) for offline reading or processing.
+A command-line tool to extract and merge video transcripts (subtitles/captions) from **M3U8 playlists** or **SRT files**. This is useful for downloading transcripts from video platforms that use HLS streaming (like Kaltura) or direct subtitle files for offline reading or processing.
 
 ## Features
 
 - **Interactive CLI**: Easy-to-use interactive prompts for folder names and URLs.
 - **M3U8 Parsing**: Extract VTT segment paths from M3U8 playlists.
+- **SRT Support**: Directly download and process `.srt` files.
 - **Transcript Merging**: Downloads and merges multiple VTT segments into a single file.
 - **Clean Output**:
-  - Generates a **raw VTT** file with timestamps preserved.
+  - Generates a **raw VTT/SRT** file with timestamps preserved.
   - Generates a **clean text** transcript with metadata and timestamps removed.
 - **Progress Tracking**: Visual progress bar during download.
 
@@ -53,9 +54,9 @@ A command-line tool to extract and merge video transcripts (subtitles/captions) 
     python main.py
     ```
 
-## How to Get the M3U8 URL
+## How to Get the URL
 
-To use this tool, you need the `.m3u8` playlist URL for the video's subtitles.
+To use this tool, you need either the `.m3u8` playlist URL (for HLS streams) or a direct link to a `.srt` file.
 
 1.  **Open Developer Tools**: Right-click on the video page and select "Inspect", then go to the **Network** tab.
 2.  **Filter**: Type `m3u8` or `vtt` in the filter box.
@@ -68,14 +69,15 @@ To use this tool, you need the `.m3u8` playlist URL for the video's subtitles.
 
 1.  Run the script using one of the methods above.
 2.  Enter a **Folder Name** when prompted (this will be the name of the output directory).
-3.  Paste the **M3U8 URL** you copied.
+3.  Paste the **M3U8 or SRT URL** you copied.
 4.  The script will:
-    - distinct `.vtt` segments.
-    - Download each segment.
-    - Merge them into a single VTT and a single text file.
+    - **For M3U8**: Find distinct `.vtt` segments, download, and merge them.
+    - **For SRT**: Download and process the file directly.
+    - Generate a raw file (VTT/SRT) and a clean plain text file.
 5.  Check the output folder for your transcripts!
 
 ## Project Structure
 
-- `main.py`: The main entry point and logic for the CLI tool.
+- `main.py`: The main entry point and CLI logic.
+- `utils.py`, `vtt.py`, `srt.py`: Helper modules for functionality.
 - `pyproject.toml` / `uv.lock`: Dependency management files.

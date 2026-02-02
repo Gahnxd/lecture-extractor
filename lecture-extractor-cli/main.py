@@ -12,97 +12,11 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
+from utils import fetch_text
+from vtt import parse_m3u8_for_vtt_paths, vtt_to_plain_text
+from srt import srt_to_plain_text
+
 console = Console()
-
-
-def parse_m3u8_for_vtt_paths(m3u8_text: str) -> list[str]:
-    """
-    Extract .vtt segment paths from an m3u8 file.
-    """
-    vtt_paths = []
-    for line in m3u8_text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.lower().endswith(".vtt"):
-            vtt_paths.append(line)
-    return vtt_paths
-
-
-def vtt_to_plain_text(vtt: str) -> str:
-    """
-    Convert WebVTT content into a rough plain-text transcript:
-    - remove WEBVTT header
-    - remove NOTE / STYLE blocks
-    - remove timestamps
-    - keep cue text, de-duplicate consecutive identical lines
-    """
-    lines = vtt.splitlines()
-    out = []
-    i = 0
-
-    # remove UTF-8 BOM if present
-    if lines and lines[0].startswith("\ufeff"):
-        lines[0] = lines[0].lstrip("\ufeff")
-
-    # Simple state machine to skip NOTE/STYLE blocks
-    skip_block = False
-
-    timestamp_re = re.compile(
-        r"^\d{2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}"
-    )
-
-    last_kept = None
-
-    while i < len(lines):
-        line = lines[i].rstrip()
-
-        # Skip WEBVTT header line
-        if i == 0 and line.strip().upper().startswith("WEBVTT"):
-            i += 1
-            continue
-
-        # Handle NOTE/STYLE blocks
-        if line.startswith("NOTE") or line.startswith("STYLE"):
-            skip_block = True
-            i += 1
-            continue
-
-        if skip_block:
-            # Blocks end at blank line
-            if line.strip() == "":
-                skip_block = False
-            i += 1
-            continue
-
-        # Skip timestamps and cue indices
-        if timestamp_re.match(line.strip()):
-            i += 1
-            continue
-
-        # Skip numeric cue identifiers
-        if line.strip().isdigit():
-            i += 1
-            continue
-
-        text = line.strip()
-        if text:
-            # Avoid consecutive duplicates (common with segmented VTT)
-            if text != last_kept:
-                out.append(text)
-                last_kept = text
-
-        i += 1
-
-    # Join lines; you can change this to paragraphs if you want
-    return "\n".join(out).strip() + "\n"
-
-
-def fetch_text(url: str, headers: dict | None = None, timeout: int = 30) -> str:
-    r = requests.get(url, headers=headers, timeout=timeout)
-    r.raise_for_status()
-    r.encoding = r.encoding or "utf-8"
-    return r.text
 
 
 def download_transcript():
@@ -112,9 +26,9 @@ def download_transcript():
         console.print("[bold red]  ✗ Error: Folder name cannot be empty.[/bold red]")
         return False
 
-    m3u8_url = Prompt.ask("\n  [bold cyan]🔗 M3U8 URL[/bold cyan]").strip()
-    if not m3u8_url:
-        console.print("[bold red]  ✗ Error: M3U8 URL cannot be empty.[/bold red]")
+    input_url = Prompt.ask("\n  [bold cyan]🔗 URL (M3U8 or SRT)[/bold cyan]").strip()
+    if not input_url:
+        console.print("[bold red]  ✗ Error: URL cannot be empty.[/bold red]")
         return False
 
     console.print()
@@ -124,8 +38,45 @@ def download_transcript():
         "Accept": "*/*",
     }
 
+    asset_id = folder_name
+    out_dir = Path(asset_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if it is an SRT file
+    if input_url.lower().endswith(".srt"):
+        with console.status("[bold yellow]⏳ Fetching SRT...[/bold yellow]", spinner="dots"):
+            try:
+                srt_content = fetch_text(input_url, headers=headers)
+            except Exception as e:
+                console.print(f"[bold red]  ✗ Error fetching SRT: {e}[/bold red]")
+                return False
+
+        merged_srt_path = out_dir / f"{asset_id}_raw.srt"
+        merged_txt_path = out_dir / f"{asset_id}_transcript.txt"
+
+        plain_text = srt_to_plain_text(srt_content)
+
+        merged_srt_path.write_text(srt_content, encoding="utf-8")
+        merged_txt_path.write_text(plain_text, encoding="utf-8")
+        
+        console.print(Panel(
+            f"[green]✓ Complete![/green]\n\n"
+            f"[dim]Raw SRT:[/dim]   [bold blue]{merged_srt_path.resolve()}[/bold blue]\n"
+            f"[dim]Transcript:[/dim] [bold blue]{merged_txt_path.resolve()}[/bold blue]",
+            title="[bold green]📄 Output Files[/bold green]",
+            border_style="green",
+            padding=(0, 2)
+        ))
+        return True
+
+    # Assume M3U8 otherwise
     with console.status("[bold yellow]⏳ Fetching playlist...[/bold yellow]", spinner="dots"):
-        m3u8_text = fetch_text(m3u8_url, headers=headers)
+        try:
+            m3u8_text = fetch_text(input_url, headers=headers)
+        except Exception as e:
+            console.print(f"[bold red]  ✗ Error fetching playlist: {e}[/bold red]")
+            return False
+
         vtt_paths = parse_m3u8_for_vtt_paths(m3u8_text)
 
     if not vtt_paths:
@@ -133,11 +84,7 @@ def download_transcript():
         console.print(m3u8_text[:400])
         return False
 
-    vtt_urls = [urljoin(m3u8_url, path) for path in vtt_paths]
-
-    asset_id = folder_name
-    out_dir = Path(asset_id)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    vtt_urls = [urljoin(input_url, path) for path in vtt_paths]
 
     merged_vtt_path = out_dir / f"{asset_id}_raw.vtt"
     merged_txt_path = out_dir / f"{asset_id}_transcript.txt"
@@ -157,10 +104,14 @@ def download_transcript():
         task = progress.add_task("[cyan]Downloading...", total=len(vtt_urls))
         
         for vtt_url in vtt_urls:
-            vtt_text = fetch_text(vtt_url, headers=headers)
-            vtt_text_clean = re.sub(r"^\ufeff?WEBVTT[^\n]*\n", "", vtt_text, flags=re.IGNORECASE)
-            merged_vtt_parts.append(vtt_text_clean.strip() + "\n\n")
-            all_plain_parts.append(vtt_to_plain_text(vtt_text_clean))
+            try:
+                vtt_text = fetch_text(vtt_url, headers=headers)
+                vtt_text_clean = re.sub(r"^\ufeff?WEBVTT[^\n]*\n", "", vtt_text, flags=re.IGNORECASE)
+                merged_vtt_parts.append(vtt_text_clean.strip() + "\n\n")
+                all_plain_parts.append(vtt_to_plain_text(vtt_text_clean))
+            except Exception as e:
+                console.print(f"[bold red]  ✗ Error fetching segment {vtt_url}: {e}[/bold red]")
+            
             progress.update(task, advance=1)
             time.sleep(0.05)
 
@@ -185,7 +136,7 @@ def download_transcript():
 def main():
     console.print()
     console.print(Panel.fit(
-        "[bold white]📚 Lecture Extractor[/bold white]\n[dim]Extract transcripts from M3U8 playlists[/dim]",
+        "[bold white]📚 Lecture Extractor[/bold white]\n[dim]Extract transcripts from M3U8 playlists or SRT files[/dim]",
         border_style="bright_magenta",
         padding=(0, 2)
     ))
