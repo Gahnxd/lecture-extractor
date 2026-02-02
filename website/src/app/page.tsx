@@ -2,15 +2,13 @@
 
 import { Spotlight } from "@/components/ui/spotlight-new";
 import { SquareButton } from "@/components/ui/square-button";
-import { useRouter } from "next/navigation";
+
 
 export default function Home() {
 
-  const router = useRouter();
 
-  const redirect = () => {
-    router.push("/extract");
-  }
+
+
 
   return (
     <div className="h-screen w-full bg-black flex flex-col items-center justify-center overflow-hidden">
@@ -26,7 +24,9 @@ export default function Home() {
 
         <div className="absolute inset-0 w-full h-full bg-black [mask-image:radial-gradient(350px_200px_at_top,transparent_20%,white)]"></div>
       </div>
-      <SquareButton className="w-[20%] -translate-y-10" blinkRate={0.8} onClick={redirect}>Get Started</SquareButton>
+      <a href="/extension.zip" download>
+        <SquareButton className="w-[20%] -translate-y-10" blinkRate={0.8}>Download Extension</SquareButton>
+      </a>
     </div>
   );
 }

@@ -42,6 +42,7 @@ A Chrome extension that automatically captures and extracts video transcripts (s
     npm run build
     ```
     This will generate the extension files in the `build` directory.
+    (This also updates the [`extension.zip`](../website/public/extension.zip) file in [`website/public`](../website/public/))
 
 ### Loading into Chrome
 
