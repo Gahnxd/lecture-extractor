@@ -1,33 +1,82 @@
 "use client";
 
-import { Spotlight } from "@/components/ui/spotlight-new";
-import { SquareButton } from "@/components/ui/square-button";
-
+import { useEffect } from "react";
+import { motion } from "motion/react";
+import { useRouter } from "next/navigation";
+import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
+import { Download, Info } from "lucide-react";
 
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, []);
 
   return (
-    <div className="h-screen w-full bg-black flex flex-col items-center justify-center overflow-hidden">
-      <Spotlight duration={0} brightness={2} rotate={50} xOffset={0} />
-      <h1 className="md:text-7xl text-3xl lg:text-9xl font-bold text-center text-white relative z-20">
-        Lecture Extractor
-      </h1>
-      <div className="w-full h-40 relative translate-y-8 translate-x-27">
-        <div className="absolute inset-x-20 top-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent h-[2px] w-3/4 blur-sm" />
-        <div className="absolute inset-x-20 top-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent h-px w-3/4" />
-        <div className="absolute inset-x-60 top-0 bg-gradient-to-r from-transparent via-sky-500 to-transparent h-[5px] w-1/4 blur-sm" />
-        <div className="absolute inset-x-60 top-0 bg-gradient-to-r from-transparent via-sky-500 to-transparent h-px w-1/4" />
+    <BackgroundGradientAnimation
+      gradientBackgroundStart="rgb(0, 0, 0)"
+      gradientBackgroundEnd="rgb(10, 10, 30)"
+      firstColor="99, 102, 241"
+      secondColor="139, 92, 246"
+      thirdColor="59, 130, 246"
+      fourthColor="16, 185, 129"
+      fifthColor="236, 72, 153"
+      pointerColor="99, 102, 241"
+      size="100%"
+      blendingValue="hard-light"
+      interactive={true}
+      containerClassName="!h-screen !w-screen"
+    >
+      <div className="absolute inset-0 flex flex-col items-center justify-center z-50 px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="flex flex-col items-center gap-8 w-full max-w-4xl"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-center space-y-4"
+          >
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white tracking-tight">
+              Lecture Extractor
+            </h1>
+            <p className="text-white/60 text-lg md:text-xl max-w-xl mx-auto font-light">
+              Extract transcripts from any lecture video with a single click
+            </p>
+          </motion.div>
 
-        <div className="absolute inset-0 w-full h-full bg-black [mask-image:radial-gradient(350px_200px_at_top,transparent_20%,white)]"></div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-4"
+          >
+            <a
+              href="/extension.zip"
+              download
+              className="group relative inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-medium rounded-full overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)]"
+            >
+              <Download className="w-5 h-5 transition-transform group-hover:-translate-y-0.5" />
+              <span>Download Extension</span>
+            </a>
+            
+            <button
+              onClick={() => router.push("/about")}
+              className="group inline-flex items-center gap-3 px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-medium rounded-full border border-white/20 transition-all duration-300 hover:bg-white/20 hover:scale-105"
+            >
+              <Info className="w-5 h-5 transition-transform group-hover:-rotate-10" />
+              <span>How It Works</span>
+            </button>
+          </motion.div>
+        </motion.div>
       </div>
-      <SquareButton 
-        className="w-[15%] -translate-y-10 text-lg" 
-        blinkRate={0.8} 
-        href="/extension.zip" 
-        download
-      >
-        Download Extension
-      </SquareButton>
-    </div>
+    </BackgroundGradientAnimation>
   );
 }
