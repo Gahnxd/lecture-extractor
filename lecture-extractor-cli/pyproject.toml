@@ -1,7 +1,7 @@
 [project]
-name = "lecture-extractor"
+name = "lecture-extractor-cli"
 version = "0.1.0"
-description = "Add your description here"
+description = "Video Transcripts Extractor CLI"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

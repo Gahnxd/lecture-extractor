@@ -10,12 +10,14 @@ A Python script to extract and merge subtitles/transcripts from M3U8 playlists (
 ### Using `uv` (Recommended)
 
 ```bash
+cd lecture-extractor-cli
 uv run main.py
 ```
 
 ### Using Standard Python / pip
 
 ```bash
+cd lecture-extractor-cli
 pip install requests rich questionary
 python main.py
 ```
@@ -37,6 +39,7 @@ To use this script, you first need to find the `.m3u8` playlist URL for the vide
 Run the script:
 
 ```bash
+cd lecture-extractor-cli
 uv run main.py
 # or if using standard python
 python main.py
