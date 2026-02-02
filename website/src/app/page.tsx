@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
 import { Download, Info } from "lucide-react";
+import { GitHubLogoIcon } from "@radix-ui/react-icons";
 
 export default function Home() {
   const router = useRouter();
@@ -74,6 +75,15 @@ export default function Home() {
               <Info className="w-5 h-5 transition-transform group-hover:-rotate-10" />
               <span>How It Works</span>
             </button>
+
+            <a
+              href="https://github.com/Gahnxd/lecture-extractor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group px-4.5 py-4 bg-gradient-to-br from-zinc-600 to-zinc-800 text-white rounded-full border border-zinc-400 shadow-lg transition-all duration-300 hover:from-zinc-550 hover:to-zinc-750 hover:scale-110 hover:shadow-[0_0_20px_rgba(161,161,170,0.4)]"
+            >
+              <GitHubLogoIcon className="w-5 h-5" />
+            </a>
           </motion.div>
         </motion.div>
       </div>
