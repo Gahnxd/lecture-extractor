@@ -192,6 +192,7 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
     let maxToolCalls = 5; // Prevent infinite loops
 
     while (maxToolCalls > 0) {
+      
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -205,6 +206,7 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
           messages: allMessages,
           tools,
           tool_choice: "auto",
+          stream: true, // Enable streaming
         }),
         signal: abortSignal,
       });
@@ -217,26 +219,90 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
         return;
       }
 
-      const data = await response.json();
-      const choice = data.choices?.[0];
-      const message = choice?.message;
-
-      if (!message) {
-        yield { content: [{ type: "text" as const, text: "No response from model." }] };
+      // Parse streaming response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        yield { content: [{ type: "text" as const, text: "Response body is not readable" }] };
         return;
       }
 
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamedText = "";
+      let toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
+      let toolCallsInProgress: Map<number, { id: string; function: { name: string; arguments: string } }> = new Map();
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete lines
+          while (true) {
+            const lineEnd = buffer.indexOf("\n");
+            if (lineEnd === -1) break;
+
+            const line = buffer.slice(0, lineEnd).trim();
+            buffer = buffer.slice(lineEnd + 1);
+
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              if (data === "[DONE]") break;
+
+              try {
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
+                
+                if (delta?.content) {
+                  streamedText += delta.content;
+                  // Yield incremental update
+                  yield {
+                    content: [{ type: "text" as const, text: streamedText }],
+                  };
+                }
+
+                // Handle streaming tool calls
+                if (delta?.tool_calls) {
+                  for (const tc of delta.tool_calls) {
+                    const idx = tc.index;
+                    if (!toolCallsInProgress.has(idx)) {
+                      toolCallsInProgress.set(idx, {
+                        id: tc.id || "",
+                        function: { name: tc.function?.name || "", arguments: "" },
+                      });
+                    }
+                    const existing = toolCallsInProgress.get(idx)!;
+                    if (tc.id) existing.id = tc.id;
+                    if (tc.function?.name) existing.function.name = tc.function.name;
+                    if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+                  }
+                }
+              } catch {
+                // Ignore JSON parse errors on incomplete chunks
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      // Collect completed tool calls
+      toolCalls = Array.from(toolCallsInProgress.values()).filter(tc => tc.id && tc.function.name);
+
       // Check for tool calls
-      if (message.tool_calls && message.tool_calls.length > 0) {
+      if (toolCalls.length > 0) {
         // Add assistant message with tool calls to conversation
         allMessages.push({
           role: "assistant",
-          content: message.content || "",
-          ...message,
+          content: streamedText || "",
+          tool_calls: toolCalls,
         });
 
         // Execute each tool call and add results
-        for (const toolCall of message.tool_calls) {
+        for (const toolCall of toolCalls) {
           const toolName = toolCall.function.name;
           let toolArgs = {};
           try {
@@ -255,15 +321,13 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
         }
 
         maxToolCalls--;
-        // Continue the loop to get the model's response after tool execution
+        // Reset for next iteration
+        accumulatedText = streamedText;
         continue;
       }
 
-      // No tool calls, we have the final response
-      accumulatedText = message.content || "";
-      yield {
-        content: [{ type: "text" as const, text: accumulatedText }],
-      };
+      // No tool calls, streaming is complete
+      accumulatedText = streamedText;
       return;
     }
 
