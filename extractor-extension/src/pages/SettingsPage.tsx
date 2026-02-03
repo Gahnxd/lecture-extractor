@@ -6,7 +6,7 @@ import { KeyRound, SaveIcon } from "lucide-react";
 
 export function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("meta-llama/llama-3.1-8b-instruct:free");
+  const [model, setModel] = useState("z-ai/glm-4.5-air:free");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
