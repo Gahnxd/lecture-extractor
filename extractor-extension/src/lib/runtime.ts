@@ -2,6 +2,7 @@
 
 import { useLocalRuntime, type ChatModelAdapter } from "@assistant-ui/react";
 import type { ChatModelRunOptions } from "@assistant-ui/react";
+
 import type { TranscriptEntry } from "@/lib/extract";
 
 // Fetch settings from chrome.storage.local
@@ -225,6 +226,29 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
     let allMessages: ChatMessage[] = [systemMessage, ...formattedMessages];
     let accumulatedText = "";
     let maxToolCalls = 5; // Prevent infinite loops
+    
+    // Track content parts OUTSIDE the loop to persist across tool call iterations
+    // This supports reasoning → respond → tool → reasoning patterns
+    type ContentPart = { 
+      type: "reasoning" | "text"; 
+      text: string; 
+      id?: string;
+    };
+    let contentParts: ContentPart[] = [];
+    let lastPartType: "reasoning" | "text" | null = null;
+
+    
+    const REASONING_DONE_MARKER = "\u200B";
+    
+    const markReasoningComplete = () => {
+      if (lastPartType === "reasoning" && contentParts.length > 0) {
+        const lastPart = contentParts[contentParts.length - 1];
+        if (!lastPart.text.endsWith(REASONING_DONE_MARKER)) {
+          lastPart.text += REASONING_DONE_MARKER;
+        }
+      }
+    };
+    let partCounter = 0;
 
     while (maxToolCalls > 0) {
       
@@ -263,7 +287,7 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let streamedText = "";
+      
       let toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
       let toolCallsInProgress: Map<number, { id: string; function: { name: string; arguments: string } }> = new Map();
 
@@ -290,16 +314,64 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
                 const parsed = JSON.parse(data);
                 const delta = parsed.choices?.[0]?.delta;
                 
+                // Handle reasoning content (for models like DeepSeek)
+                if (delta?.reasoning_content || delta?.reasoning) {
+                  const reasoningChunk = delta.reasoning_content || delta.reasoning;
+                  
+                  // If last part was reasoning, append to it; otherwise start new reasoning block
+                  if (lastPartType === "reasoning" && contentParts.length > 0) {
+                    contentParts[contentParts.length - 1].text += reasoningChunk;
+                  } else {
+                    // Finalize previous reasoning block
+                    markReasoningComplete();
+                    
+                    // Create new reasoning block with unique ID
+                    partCounter++;
+                    const newId = `reasoning-${partCounter}`;
+                    contentParts.push({ 
+                      type: "reasoning", 
+                      text: reasoningChunk,
+                      id: newId,
+                    });
+                    
+                    lastPartType = "reasoning";
+                  }
+                  
+                  // Yield current state
+                  yield { content: [...contentParts] };
+                }
+                
                 if (delta?.content) {
-                  streamedText += delta.content;
-                  // Yield incremental update
-                  yield {
-                    content: [{ type: "text" as const, text: streamedText }],
-                  };
+                  const textChunk = delta.content;
+                  
+                  // If transitioning from reasoning to text, finalize reasoning
+                  if (lastPartType === "reasoning") {
+                    markReasoningComplete();
+                  }
+                  
+                  // If last part was text, append to it; otherwise start new text block
+                  if (lastPartType === "text" && contentParts.length > 0) {
+                    contentParts[contentParts.length - 1].text += textChunk;
+                  } else {
+                    // Create new text block with unique ID
+                    partCounter++;
+                    contentParts.push({ 
+                      type: "text", 
+                      text: textChunk,
+                      id: `text-${partCounter}`,
+                    });
+                    lastPartType = "text";
+                  }
+                  
+                  // Yield current state
+                  yield { content: [...contentParts] };
                 }
 
                 // Handle streaming tool calls
                 if (delta?.tool_calls) {
+                  // Finalize reasoning before tool calls
+                  markReasoningComplete();
+                  
                   for (const tc of delta.tool_calls) {
                     const idx = tc.index;
                     if (!toolCallsInProgress.has(idx)) {
@@ -324,8 +396,17 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
         reader.releaseLock();
       }
 
+      // Finalize any remaining reasoning duration after stream ends
+      markReasoningComplete();
+
       // Collect completed tool calls
       toolCalls = Array.from(toolCallsInProgress.values()).filter(tc => tc.id && tc.function.name);
+
+      // Helper to get accumulated text from contentParts
+      const getAccumulatedText = () => contentParts
+        .filter(p => p.type === "text")
+        .map(p => p.text)
+        .join("");
 
       // Check for tool calls
       if (toolCalls.length > 0) {
@@ -333,7 +414,7 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
         // OpenRouter requires tool_calls to have type: "function" field
         allMessages.push({
           role: "assistant",
-          content: streamedText || "",
+          content: getAccumulatedText() || "",
           tool_calls: toolCalls.map(tc => ({
             ...tc,
             type: "function" as const,
@@ -361,12 +442,12 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
 
         maxToolCalls--;
         // Reset for next iteration
-        accumulatedText = streamedText;
+        accumulatedText = getAccumulatedText();
         continue;
       }
 
       // No tool calls, streaming is complete
-      accumulatedText = streamedText;
+      accumulatedText = getAccumulatedText();
       return;
     }
 

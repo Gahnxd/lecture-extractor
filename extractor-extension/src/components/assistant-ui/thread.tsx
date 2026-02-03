@@ -7,6 +7,11 @@ import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { TranscriptMentionPopup } from "@/components/assistant-ui/transcript-mention";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai/reasoning";
 import { Button } from "@/components/ui/button";
 import type { TranscriptEntry } from "@/lib/extract";
 import { cn } from "@/lib/utils";
@@ -22,6 +27,7 @@ import {
   ThreadPrimitive,
   useAssistantRuntime,
   useComposerRuntime,
+  useThread,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -36,7 +42,39 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
-import { useState, type FC } from "react";
+import { useState, type FC, type PropsWithChildren } from "react";
+
+// Reasoning component for individual reasoning parts - renders full collapsible with content
+// Reads timing from shared store using the part's id
+interface ReasoningTextProps {
+  text: string;
+}
+
+const REASONING_DONE_MARKER = "\u200B";
+
+const ReasoningText: FC<ReasoningTextProps> = ({ text }) => {
+  const { isRunning } = useThread();
+
+  const isDone = text.endsWith(REASONING_DONE_MARKER);
+  const displayText = isDone ? text.slice(0, -1) : text;
+  
+  const isStreaming = !isDone && isRunning;
+  
+  return (
+    <Reasoning isStreaming={isStreaming} defaultOpen={true}>
+      <ReasoningTrigger />
+      <ReasoningContent>{displayText}</ReasoningContent>
+    </Reasoning>
+  );
+};
+
+// Reasoning group wrapper - when multiple consecutive reasoning parts, wrap them together
+// We don't need extra wrapping since each ReasoningText already has its own Reasoning component
+const ReasoningGroupWrapper: FC<PropsWithChildren<{ startIndex: number; endIndex: number }>> = ({
+  children,
+}) => {
+  return <>{children}</>;
+};
 
 // Slash command handler hook
 const useSlashCommands = () => {
@@ -326,6 +364,8 @@ const AssistantMessage: FC = () => {
         <MessagePrimitive.Parts
           components={{
             Text: MarkdownText,
+            Reasoning: ReasoningText,
+            ReasoningGroup: ReasoningGroupWrapper,
             tools: { Fallback: ToolFallback },
           }}
         />
