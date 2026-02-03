@@ -53,10 +53,10 @@ export const Reasoning = memo(
 
     const [hasAutoClosed, setHasAutoClosed] = useState(false)
 
-    // Auto-open when streaming starts, auto-close when streaming ends (once only)
+    // Auto open and close
     useEffect(() => {
       if (defaultOpen && !isStreaming && isOpen && !hasAutoClosed) {
-        // Add a small delay before closing to allow user to see the content
+        // Allow user to see the content
         const timer = setTimeout(() => {
           setIsOpen(false)
           setHasAutoClosed(true)
@@ -73,7 +73,7 @@ export const Reasoning = memo(
     return (
       <ReasoningContext.Provider value={{ isStreaming, isOpen, setIsOpen }}>
         <Collapsible
-          className={cn("not-prose my-6", className)}
+          className={cn("not-prose my-2", className)}
           onOpenChange={handleOpenChange}
           open={isOpen}
           {...props}

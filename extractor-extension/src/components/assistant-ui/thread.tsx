@@ -4,7 +4,7 @@ import {
   UserMessageAttachments,
 } from "@/components/assistant-ui/attachment";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
-import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { TranscriptMentionPopup } from "@/components/assistant-ui/transcript-mention";
 import {
@@ -12,7 +12,9 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai/reasoning";
+import { Tool, ToolHeader } from "@/components/ai/tool";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { TranscriptEntry } from "@/lib/extract";
 import { cn } from "@/lib/utils";
 import {
@@ -28,6 +30,7 @@ import {
   useAssistantRuntime,
   useComposerRuntime,
   useThread,
+  type ToolCallMessagePartComponent,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -42,10 +45,9 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
-import { useState, type FC, type PropsWithChildren } from "react";
+import { useState, useEffect, type FC, type PropsWithChildren } from "react";
 
-// Reasoning component for individual reasoning parts - renders full collapsible with content
-// Reads timing from shared store using the part's id
+// Individual reasoning parts
 interface ReasoningTextProps {
   text: string;
 }
@@ -68,8 +70,85 @@ const ReasoningText: FC<ReasoningTextProps> = ({ text }) => {
   );
 };
 
-// Reasoning group wrapper - when multiple consecutive reasoning parts, wrap them together
-// We don't need extra wrapping since each ReasoningText already has its own Reasoning component
+const ToolRender: ToolCallMessagePartComponent = ({ toolName, argsText, result, status }) => {
+
+
+  const argsObj = (() => {
+    try {
+      return argsText ? JSON.parse(argsText) : {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const resultDisplay = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+
+  const [transcriptName, setTranscriptName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toolName === "get_raw_transcript" && argsObj.pageUrl) {
+      chrome.storage.local.get(["global_data"], (res) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transcripts = (res.global_data as any)?.transcripts || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const found = transcripts.find((t: any) => t.pageUrl === argsObj.pageUrl);
+        if (found) {
+           setTranscriptName(found.pageTitle);
+        }
+      });
+    }
+  }, [toolName, argsObj.pageUrl]);
+
+  let displayTitle = toolName;
+  if (toolName === "list_transcripts") {
+      displayTitle = "Looking at available transcripts";
+  } else if (toolName === "get_raw_transcript") {
+      displayTitle = transcriptName 
+          ? `Looking at ${transcriptName}'s transcript`
+          : "Looking at transcript";
+  }
+
+  return (
+    <Tool className="my-2 rounded-lg border-none">
+      <Collapsible defaultOpen={false}>
+        <CollapsibleTrigger asChild>
+          <div className="cursor-pointer overflow-hidden">
+            <ToolHeader 
+              title={displayTitle} 
+              type="tool-invocation" 
+              className="py-1 px-0 h-8 text-xs text-muted-foreground transition-colors hover:text-foreground truncate" 
+            />
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+            <div className="border-t px-3 py-2 text-xs">
+                <div className="mb-1 font-medium text-muted-foreground">Arguments</div>
+                <pre className="whitespace-pre-wrap rounded-md bg-muted/50 p-2 font-mono text-[10px]">
+                  {JSON.stringify(argsObj, null, 2)}
+                </pre>
+                
+                {result && (
+                  <>
+                    <div className="mt-2 mb-1 font-medium text-muted-foreground">Result</div>
+                    <pre className="whitespace-pre-wrap rounded-md bg-muted/50 p-2 font-mono text-[10px]">
+                      {resultDisplay}
+                    </pre>
+                  </>
+                )}
+                
+                {status?.type === "incomplete" && status.error && (
+                   <div className="mt-2 text-destructive">
+                      Error: {typeof status.error === "string" ? status.error : JSON.stringify(status.error)}
+                   </div>
+                )}
+            </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </Tool>
+  );
+};
+
+// Reasoning group wrapper
 const ReasoningGroupWrapper: FC<PropsWithChildren<{ startIndex: number; endIndex: number }>> = ({
   children,
 }) => {
@@ -85,19 +164,18 @@ const useSlashCommands = () => {
     const trimmed = text.trim().toLowerCase();
     
     if (trimmed === "/clear") {
-      // Clear the chat by switching to a new thread
+      // Clear the chat
       runtime.switchToNewThread();
       composerRuntime.reset();
-      return true; // Command handled
+      return true;
     }
     
     if (trimmed === "/help") {
-      // For /help, we let it go through to the runtime which will handle it
-      // since we can't inject AI messages from here
+      // Handle it in runtime
       return false;
     }
     
-    return false; // Not a recognized command, let it through
+    return false;
   };
   
   return { handleSlashCommand };
@@ -210,23 +288,21 @@ const Composer: FC = () => {
   const [mentionStartPos, setMentionStartPos] = useState(-1);
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle @ mention keyboard events (let popup handle them)
+    // Handle @ mention
     if (mentionOpen && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
-      return; // Let the popup handle these
+      return;
     }
     if (mentionOpen && e.key === "Enter") {
-      // Let the popup handle Enter
       return;
     }
     
     if (e.key === "Enter" && !e.shiftKey) {
       const text = composerRuntime.getState().text.trim().toLowerCase();
-      // Check if it's a slash command that should be handled locally
+      // Check for slash command
       if (text.startsWith("/") && handleSlashCommand(text)) {
         e.preventDefault();
-        return; // Command was handled locally
+        return;
       }
-      // Otherwise let it go through normally
     }
   };
 
@@ -234,15 +310,15 @@ const Composer: FC = () => {
     const text = e.target.value;
     const cursorPos = e.target.selectionStart ?? text.length;
     
-    // Find if we're in an @ mention context
+    // Find @ mention
     const textBeforeCursor = text.slice(0, cursorPos);
     const atIndex = textBeforeCursor.lastIndexOf("@");
     
     if (atIndex !== -1) {
-      // Check if there's a space before @ or it's at the start
+      // Check space before @
       if (atIndex === 0 || textBeforeCursor[atIndex - 1] === " " || textBeforeCursor[atIndex - 1] === "\n") {
         const query = textBeforeCursor.slice(atIndex + 1);
-        // Only show popup if query doesn't contain spaces (still typing the mention)
+        // Query doesn't contain spaces
         if (!query.includes(" ")) {
           setMentionOpen(true);
           setMentionQuery(query);
@@ -252,7 +328,6 @@ const Composer: FC = () => {
       }
     }
     
-    // Close popup if not in mention context
     setMentionOpen(false);
     setMentionQuery("");
     setMentionStartPos(-1);
@@ -285,7 +360,6 @@ const Composer: FC = () => {
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
         
-        {/* @ Mention Popup */}
         <TranscriptMentionPopup
           isOpen={mentionOpen}
           searchQuery={mentionQuery}
@@ -366,7 +440,7 @@ const AssistantMessage: FC = () => {
             Text: MarkdownText,
             Reasoning: ReasoningText,
             ReasoningGroup: ReasoningGroupWrapper,
-            tools: { Fallback: ToolFallback },
+            tools: { Fallback: ToolRender },
           }}
         />
         <MessageError />

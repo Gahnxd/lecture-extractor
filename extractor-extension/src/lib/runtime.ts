@@ -5,7 +5,7 @@ import type { ChatModelRunOptions } from "@assistant-ui/react";
 
 import type { TranscriptEntry } from "@/lib/extract";
 
-// Fetch settings from chrome.storage.local
+// Fetch settings
 const getSettings = async () => {
   return new Promise<{ apiKey: string; model: string }>((resolve) => {
     chrome.storage.local.get(["openRouterApiKey", "aiModel"], (result: { openRouterApiKey?: string; aiModel?: string }) => {
@@ -17,7 +17,7 @@ const getSettings = async () => {
   });
 };
 
-// Fetch transcripts from chrome.storage.local
+// Fetch transcripts
 const getTranscripts = async (): Promise<TranscriptEntry[]> => {
   return new Promise((resolve) => {
     chrome.storage.local.get(["global_data"], (result: { global_data?: { transcripts?: TranscriptEntry[] } }) => {
@@ -26,7 +26,7 @@ const getTranscripts = async (): Promise<TranscriptEntry[]> => {
   });
 };
 
-// Tool definitions for OpenRouter
+// Tool definitions
 const tools = [
   {
     type: "function" as const,
@@ -103,7 +103,7 @@ const executeTool = async (name: string, args: Record<string, unknown>): Promise
 
 const OpenRouterModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }: ChatModelRunOptions) {
-    // Check for slash commands in the last user message
+    // Check for slash commands
     const lastMessage = messages[messages.length - 1];
     if (lastMessage?.role === "user") {
       const textContent = lastMessage.content
@@ -114,14 +114,10 @@ const OpenRouterModelAdapter: ChatModelAdapter = {
         .toLowerCase();
       
       if (textContent === "/clear") {
-        // Signal that chat should be cleared
-        // The actual clearing needs to happen from the UI side
+        // Clear chat
         yield {
           content: [{ type: "text" as const, text: "[SYSTEM] Chat cleared. Starting fresh conversation..." }],
         };
-        // Note: We can't actually switch threads from here since that's a UI action
-        // The runtime adapter doesn't have access to switchToNewThread()
-        // Consider this a placeholder that shows the command was recognized
         return;
       }
       
@@ -147,7 +143,6 @@ const OpenRouterModelAdapter: ChatModelAdapter = {
       return;
     }
 
-    // System message explaining the assistant's capabilities
     const systemMessage = {
       role: "system" as const,
       content: `You are a helpful AI assistant for the Video Transcript Extractor extension. You help users understand, summarize, search, and analyze their video transcripts.
@@ -159,12 +154,10 @@ You have access to tools to interact with the user's transcripts:
 Always use list_transcripts first to see what's available, then get_raw_transcript to read the content. When referencing content, cite timestamps when available.`,
     };
 
-    // Convert messages to OpenRouter format (handling text, images, and file attachments)
+    // Convert messages to OpenRouter format
     const formattedMessages = messages.map((m) => {
-      // Collect all content parts
       const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
       
-      // Process regular content
       for (const part of m.content) {
         if (part.type === "text") {
           contentParts.push({ type: "text", text: (part as { type: "text"; text: string }).text });
@@ -177,8 +170,6 @@ Always use list_transcripts first to see what's available, then get_raw_transcri
         }
       }
       
-      // Process attachments (from the attachments property, not content)
-      // Cast to access attachments property which exists on user messages
       const msgWithAttachments = m as { attachments?: Array<{ type: string; name: string; content?: Array<{ type: string; text?: string; image?: string }> }> };
       
       if (msgWithAttachments.attachments && msgWithAttachments.attachments.length > 0) {
@@ -202,16 +193,16 @@ Always use list_transcripts first to see what's available, then get_raw_transcri
         }
       }
       
-      // Build final message
       const hasMultipleTypes = contentParts.some(p => p.type === "image_url");
       
       if (hasMultipleTypes || contentParts.length > 1) {
+        // Message with multiple content types
         return {
           role: m.role as "user" | "assistant" | "system",
           content: contentParts,
         };
       } else {
-        // Simple text-only message
+        // Text-only message
         const text = contentParts.filter(p => p.type === "text").map(p => p.text).join("");
         return {
           role: m.role as "user" | "assistant" | "system",
@@ -225,17 +216,11 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
     
     let allMessages: ChatMessage[] = [systemMessage, ...formattedMessages];
     let accumulatedText = "";
-    let maxToolCalls = 5; // Prevent infinite loops
-    
-    // Track content parts OUTSIDE the loop to persist across tool call iterations
-    // This supports reasoning → respond → tool → reasoning patterns
-    type ContentPart = { 
-      type: "reasoning" | "text"; 
-      text: string; 
-      id?: string;
-    };
-    let contentParts: ContentPart[] = [];
-    let lastPartType: "reasoning" | "text" | null = null;
+    let maxToolCalls = 10;
+
+    let contentParts: any[] = [];
+    let lastPartType: "reasoning" | "text" | "tool-call" | null = null;
+    let toolCallIndexToContentIndex = new Map<number, number>();
 
     
     const REASONING_DONE_MARKER = "\u200B";
@@ -249,8 +234,10 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
       }
     };
     let partCounter = 0;
+    let globalToolCounter = 0;
 
     while (maxToolCalls > 0) {
+      toolCallIndexToContentIndex.clear();
       
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -265,7 +252,7 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
           messages: allMessages,
           tools,
           tool_choice: "auto",
-          stream: true, // Enable streaming
+          stream: true,
         }),
         signal: abortSignal,
       });
@@ -278,7 +265,6 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
         return;
       }
 
-      // Parse streaming response
       const reader = response.body?.getReader();
       if (!reader) {
         yield { content: [{ type: "text" as const, text: "Response body is not readable" }] };
@@ -298,7 +284,6 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
 
           buffer += decoder.decode(value, { stream: true });
 
-          // Process complete lines
           while (true) {
             const lineEnd = buffer.indexOf("\n");
             if (lineEnd === -1) break;
@@ -314,15 +299,13 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
                 const parsed = JSON.parse(data);
                 const delta = parsed.choices?.[0]?.delta;
                 
-                // Handle reasoning content (for models like DeepSeek)
+                // Handle reasoning content
                 if (delta?.reasoning_content || delta?.reasoning) {
                   const reasoningChunk = delta.reasoning_content || delta.reasoning;
                   
-                  // If last part was reasoning, append to it; otherwise start new reasoning block
                   if (lastPartType === "reasoning" && contentParts.length > 0) {
                     contentParts[contentParts.length - 1].text += reasoningChunk;
                   } else {
-                    // Finalize previous reasoning block
                     markReasoningComplete();
                     
                     // Create new reasoning block with unique ID
@@ -337,23 +320,22 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
                     lastPartType = "reasoning";
                   }
                   
-                  // Yield current state
                   yield { content: [...contentParts] };
                 }
                 
                 if (delta?.content) {
                   const textChunk = delta.content;
                   
-                  // If transitioning from reasoning to text, finalize reasoning
+                  // Finalize reasoning
                   if (lastPartType === "reasoning") {
                     markReasoningComplete();
                   }
                   
-                  // If last part was text, append to it; otherwise start new text block
+                  // Append text
                   if (lastPartType === "text" && contentParts.length > 0) {
                     contentParts[contentParts.length - 1].text += textChunk;
                   } else {
-                    // Create new text block with unique ID
+                    // Create new text block
                     partCounter++;
                     contentParts.push({ 
                       type: "text", 
@@ -363,17 +345,18 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
                     lastPartType = "text";
                   }
                   
-                  // Yield current state
                   yield { content: [...contentParts] };
                 }
 
-                // Handle streaming tool calls
+                // Handle tool calls
                 if (delta?.tool_calls) {
                   // Finalize reasoning before tool calls
                   markReasoningComplete();
                   
                   for (const tc of delta.tool_calls) {
                     const idx = tc.index;
+                    
+                    // Update toolCallsInProgress for execution
                     if (!toolCallsInProgress.has(idx)) {
                       toolCallsInProgress.set(idx, {
                         id: tc.id || "",
@@ -384,7 +367,34 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
                     if (tc.id) existing.id = tc.id;
                     if (tc.function?.name) existing.function.name = tc.function.name;
                     if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+
+                    // Update contentParts for rendering
+                    if (!toolCallIndexToContentIndex.has(idx)) {
+                       // New tool call part
+                       const newContentIndex = contentParts.length;
+                       toolCallIndexToContentIndex.set(idx, newContentIndex);
+                       globalToolCounter++;
+                       contentParts.push({
+                          type: "tool-call",
+                          toolCallId: tc.id || "",
+                          toolName: tc.function?.name || "",
+                          argsText: tc.function?.arguments || "",
+                          id: `tool-call-${globalToolCounter}`,
+                       });
+                       lastPartType = "tool-call";
+                    } else {
+                       // Update existing tool call part
+                       const contentIndex = toolCallIndexToContentIndex.get(idx)!;
+                       const part = contentParts[contentIndex];
+                       if (part.type === "tool-call") {
+                          if (tc.id) part.toolCallId = tc.id;
+                          if (tc.function?.name) part.toolName = tc.function.name;
+                          if (tc.function?.arguments) part.argsText += tc.function.arguments;
+                       }
+                    }
                   }
+                  
+                  yield { content: [...contentParts] };
                 }
               } catch {
                 // Ignore JSON parse errors on incomplete chunks
@@ -396,22 +406,20 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
         reader.releaseLock();
       }
 
-      // Finalize any remaining reasoning duration after stream ends
+      // Finalize reasoning after stream ends
       markReasoningComplete();
 
       // Collect completed tool calls
       toolCalls = Array.from(toolCallsInProgress.values()).filter(tc => tc.id && tc.function.name);
 
-      // Helper to get accumulated text from contentParts
+      // Get accumulated text from contentParts
       const getAccumulatedText = () => contentParts
         .filter(p => p.type === "text")
         .map(p => p.text)
         .join("");
 
-      // Check for tool calls
       if (toolCalls.length > 0) {
         // Add assistant message with tool calls to conversation
-        // OpenRouter requires tool_calls to have type: "function" field
         allMessages.push({
           role: "assistant",
           content: getAccumulatedText() || "",
@@ -458,7 +466,7 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
   },
 };
 
-// Helper to convert file to base64 data URL
+// Convert file to base64 data URL
 const fileToDataUrl = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -472,7 +480,6 @@ const fileToDataUrl = (file: File): Promise<string> => {
 const attachmentAdapter = {
   accept: "image/*,.pdf,.txt,.md,.json,.csv",
   async add({ file }: { file: File }) {
-    // Return a pending attachment - content will be created in send()
     return {
       id: `${Date.now()}-${file.name}`,
       type: file.type.startsWith("image/") ? "image" as const : "document" as const,
@@ -483,10 +490,10 @@ const attachmentAdapter = {
     };
   },
   async remove() {
-    // No cleanup needed for client-side handling
+    // No cleanup needed
   },
   async send(attachment: { id: string; type: "image" | "document" | "file"; name: string; contentType: string; file: File }) {
-    // Convert file to content when sending
+    // Convert file to content
     const isImage = attachment.file.type.startsWith("image/");
     const dataUrl = await fileToDataUrl(attachment.file);
     
