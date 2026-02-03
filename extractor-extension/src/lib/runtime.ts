@@ -102,6 +102,41 @@ const executeTool = async (name: string, args: Record<string, unknown>): Promise
 
 const OpenRouterModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }: ChatModelRunOptions) {
+    // Check for slash commands in the last user message
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === "user") {
+      const textContent = lastMessage.content
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join("")
+        .trim()
+        .toLowerCase();
+      
+      if (textContent === "/clear") {
+        // Signal that chat should be cleared
+        // The actual clearing needs to happen from the UI side
+        yield {
+          content: [{ type: "text" as const, text: "[SYSTEM] Chat cleared. Starting fresh conversation..." }],
+        };
+        // Note: We can't actually switch threads from here since that's a UI action
+        // The runtime adapter doesn't have access to switchToNewThread()
+        // Consider this a placeholder that shows the command was recognized
+        return;
+      }
+      
+      if (textContent === "/help") {
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: `### Available Commands\n\n| Command | Description |\n| :--- | :--- |\n| \`/clear\` | Clear the chat and start fresh |\n| \`/help\` | Show this help message |\n\n**Tips:**\n- Ask me to summarize or analyze any captured transcripts\n- I can search for specific topics within transcripts\n- Upload files to discuss their contents`,
+            },
+          ],
+        };
+        return;
+      }
+    }
+
     const { apiKey, model } = await getSettings();
 
     if (!apiKey) {

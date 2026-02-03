@@ -18,6 +18,8 @@ import {
   MessagePrimitive,
   SuggestionPrimitive,
   ThreadPrimitive,
+  useAssistantRuntime,
+  useComposerRuntime,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -33,6 +35,33 @@ import {
   SquareIcon,
 } from "lucide-react";
 import type { FC } from "react";
+
+// Slash command handler hook
+const useSlashCommands = () => {
+  const runtime = useAssistantRuntime();
+  const composerRuntime = useComposerRuntime();
+  
+  const handleSlashCommand = (text: string): boolean => {
+    const trimmed = text.trim().toLowerCase();
+    
+    if (trimmed === "/clear") {
+      // Clear the chat by switching to a new thread
+      runtime.switchToNewThread();
+      composerRuntime.reset();
+      return true; // Command handled
+    }
+    
+    if (trimmed === "/help") {
+      // For /help, we let it go through to the runtime which will handle it
+      // since we can't inject AI messages from here
+      return false;
+    }
+    
+    return false; // Not a recognized command, let it through
+  };
+  
+  return { handleSlashCommand };
+};
 
 export const Thread: FC = () => {
   return (
@@ -132,16 +161,32 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC = () => {
+  const { handleSlashCommand } = useSlashCommands();
+  const composerRuntime = useComposerRuntime();
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      const text = composerRuntime.getState().text.trim().toLowerCase();
+      // Check if it's a slash command that should be handled locally
+      if (text.startsWith("/") && handleSlashCommand(text)) {
+        e.preventDefault();
+        return; // Command was handled locally
+      }
+      // Otherwise let it go through normally (including /help which goes to runtime)
+    }
+  };
+
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
         <ComposerPrimitive.Input
-          placeholder="Send a message..."
+          placeholder={`Send a message or try /help...`}
           className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
           rows={1}
           autoFocus
           aria-label="Message input"
+          onKeyDown={handleKeyDown}
         />
         <ComposerAction />
       </ComposerPrimitive.AttachmentDropzone>
