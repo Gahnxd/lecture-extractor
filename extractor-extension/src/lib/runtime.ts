@@ -330,10 +330,14 @@ type MessageContent = string | Array<{ type: string; text?: string; image_url?: 
       // Check for tool calls
       if (toolCalls.length > 0) {
         // Add assistant message with tool calls to conversation
+        // OpenRouter requires tool_calls to have type: "function" field
         allMessages.push({
           role: "assistant",
           content: streamedText || "",
-          tool_calls: toolCalls,
+          tool_calls: toolCalls.map(tc => ({
+            ...tc,
+            type: "function" as const,
+          })),
         });
 
         // Execute each tool call and add results

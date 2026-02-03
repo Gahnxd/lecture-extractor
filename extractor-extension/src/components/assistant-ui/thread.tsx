@@ -6,7 +6,9 @@ import {
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { TranscriptMentionPopup } from "@/components/assistant-ui/transcript-mention";
 import { Button } from "@/components/ui/button";
+import type { TranscriptEntry } from "@/lib/extract";
 import { cn } from "@/lib/utils";
 import {
   ActionBarMorePrimitive,
@@ -34,7 +36,7 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
-import type { FC } from "react";
+import { useState, type FC } from "react";
 
 // Slash command handler hook
 const useSlashCommands = () => {
@@ -164,7 +166,21 @@ const Composer: FC = () => {
   const { handleSlashCommand } = useSlashCommands();
   const composerRuntime = useComposerRuntime();
   
+  // @ mention state
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStartPos, setMentionStartPos] = useState(-1);
+  
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle @ mention keyboard events (let popup handle them)
+    if (mentionOpen && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
+      return; // Let the popup handle these
+    }
+    if (mentionOpen && e.key === "Enter") {
+      // Let the popup handle Enter
+      return;
+    }
+    
     if (e.key === "Enter" && !e.shiftKey) {
       const text = composerRuntime.getState().text.trim().toLowerCase();
       // Check if it's a slash command that should be handled locally
@@ -172,14 +188,73 @@ const Composer: FC = () => {
         e.preventDefault();
         return; // Command was handled locally
       }
-      // Otherwise let it go through normally (including /help which goes to runtime)
+      // Otherwise let it go through normally
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    const cursorPos = e.target.selectionStart ?? text.length;
+    
+    // Find if we're in an @ mention context
+    const textBeforeCursor = text.slice(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf("@");
+    
+    if (atIndex !== -1) {
+      // Check if there's a space before @ or it's at the start
+      if (atIndex === 0 || textBeforeCursor[atIndex - 1] === " " || textBeforeCursor[atIndex - 1] === "\n") {
+        const query = textBeforeCursor.slice(atIndex + 1);
+        // Only show popup if query doesn't contain spaces (still typing the mention)
+        if (!query.includes(" ")) {
+          setMentionOpen(true);
+          setMentionQuery(query);
+          setMentionStartPos(atIndex);
+          return;
+        }
+      }
+    }
+    
+    // Close popup if not in mention context
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStartPos(-1);
+  };
+
+  const handleMentionSelect = (transcript: TranscriptEntry) => {
+    const currentText = composerRuntime.getState().text;
+    // Replace @query with formatted mention
+    const beforeMention = currentText.slice(0, mentionStartPos);
+    const afterMention = currentText.slice(
+      mentionStartPos + 1 + mentionQuery.length
+    );
+    const mentionText = `\`@[${transcript.pageTitle}]\` `;
+    const newText = beforeMention + mentionText + afterMention;
+    
+    composerRuntime.setText(newText);
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStartPos(-1);
+  };
+
+  const handleMentionClose = () => {
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionStartPos(-1);
   };
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
+        
+        {/* @ Mention Popup */}
+        <TranscriptMentionPopup
+          isOpen={mentionOpen}
+          searchQuery={mentionQuery}
+          onSelect={handleMentionSelect}
+          onClose={handleMentionClose}
+        />
+        
         <ComposerPrimitive.Input
           placeholder={`Send a message or try /help...`}
           className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
@@ -187,6 +262,7 @@ const Composer: FC = () => {
           autoFocus
           aria-label="Message input"
           onKeyDown={handleKeyDown}
+          onChange={handleInputChange}
         />
         <ComposerAction />
       </ComposerPrimitive.AttachmentDropzone>
