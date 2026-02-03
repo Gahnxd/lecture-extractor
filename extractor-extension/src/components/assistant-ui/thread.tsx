@@ -368,7 +368,7 @@ const Composer: FC = () => {
         />
         
         <ComposerPrimitive.Input
-          placeholder={`Send a message or try /help...`}
+          placeholder={`Send a message or try /help`}
           className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
           rows={1}
           autoFocus
