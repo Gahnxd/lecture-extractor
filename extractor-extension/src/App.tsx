@@ -41,14 +41,23 @@ import {
   CopyIcon, 
   ClipboardCopyIcon,
   Captions,
-  RefreshCcwIcon 
+  RefreshCcwIcon,
+  BotIcon,
+  Settings2Icon
 } from "lucide-react";
-import "./App.css";
-import { Spinner } from "./components/ui/spinner";
+import "@/App.css";
+import { Spinner } from "@/components/ui/spinner";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
-import type { TranscriptEntry } from "./lib/extract";
+import type { TranscriptEntry } from "@/lib/extract";
+import { useOpenRouterRuntime } from "@/lib/runtime";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar";
+import { AssistantPage } from "@/pages/AssistantPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 
-function App() {
+type Page = "extractor" | "assistant" | "settings";
+
+function ExtractorPage() {
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -183,18 +192,15 @@ function App() {
 
   if (loading) {
     return (
-      <div className="app dark h-full">
-        <div className="flex items-center justify-center p-8 text-muted-foreground">
-          Loading...
-        </div>
+      <div className="flex items-center justify-center p-8 text-muted-foreground h-full">
+        Loading...
       </div>
     );
   }
 
   return (
-    <TooltipProvider>
-    <div className="app dark h-full">
-      <header className="flex items-center justify-between p-4 min-h-[72px]">
+    <div className="flex flex-col h-full">
+      <header className="flex items-center justify-between p-4 min-h-[72px] shrink-0">
         <h1 className="text-lg font-semibold">Video Transcript Extractor</h1>
         {selected.size > 1 && (
           <DropdownMenu>
@@ -252,7 +258,7 @@ function App() {
       </header>
 
       {transcripts.length === 0 ? (
-        <Empty className="h-auto py-12">
+        <Empty className="h-auto py-12 flex-1">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Captions className="size-6" />
@@ -276,7 +282,7 @@ function App() {
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="p-4 pb-48">
+        <div className="p-4 flex-1 overflow-auto">
         <Table className="table-fixed w-full">
           <TableHeader>
             <TableRow>
@@ -388,7 +394,54 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function AppContent() {
+  const [page, setPage] = useState<Page>("extractor");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <TooltipProvider>
+      <div className="app dark h-full flex">
+        <Sidebar open={sidebarOpen} setOpen={setSidebarOpen}>
+          <SidebarBody className="h-full gap-2 bg-zinc-900 border-r border-zinc-800">
+            <div className="flex flex-col gap-1">
+              <SidebarLink
+                link={{ icon: <Captions className="size-5" />, label: "Extractor" }}
+                active={page === "extractor"}
+                onClick={() => setPage("extractor")}
+              />
+              <SidebarLink
+                link={{ icon: <BotIcon className="size-5" />, label: "Assistant" }}
+                active={page === "assistant"}
+                onClick={() => setPage("assistant")}
+              />
+              <SidebarLink
+                link={{ icon: <Settings2Icon className="size-5" />, label: "Settings" }}
+                active={page === "settings"}
+                onClick={() => setPage("settings")}
+              />
+            </div>
+          </SidebarBody>
+        </Sidebar>
+
+        <main className="flex-1 overflow-hidden">
+          {page === "extractor" && <ExtractorPage />}
+          {page === "assistant" && <AssistantPage />}
+          {page === "settings" && <SettingsPage />}
+        </main>
+      </div>
     </TooltipProvider>
+  );
+}
+
+function App() {
+  const runtime = useOpenRouterRuntime();
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <AppContent />
+    </AssistantRuntimeProvider>
   );
 }
 
